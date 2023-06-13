@@ -1,0 +1,4 @@
+# Usage: pip install -r requirements.txt
+
+# Base ----------------------------------------
+pygame >= 2.4.0
