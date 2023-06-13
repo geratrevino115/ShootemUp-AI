@@ -1,8 +1,8 @@
 import sys
 import pygame
 from pygame.locals import *
-from Models.Player import Player
-from Models.Background import Background
+from models.Player import Player
+from models.Background import Background
  
 class App:
     def __init__(self):
