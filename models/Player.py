@@ -4,7 +4,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.image = pygame.image.load("assets/rocket.png")
-        self.image = pygame.transform.scale(self.image, (62, 108))
+        self.image = pygame.transform.scale(self.image, (31, 54))
         self.rect = self.image.get_rect()
         self.rect.center = (320, 200)
 
