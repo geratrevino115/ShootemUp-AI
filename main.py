@@ -6,6 +6,7 @@ from models.Player import Player
 from models.Background import Background
 from models.Enemy import Enemy
 from models.Bullet import Bullet
+from models.Explosion import Explosion
 from constants import WIDTH, HEIGHT, FPS, ACC, FRIC, ENEMY_BASE_SPEED, ENEMY_SPEED_INCREMENT, LEVEL_THRESHOLD
 
 
@@ -27,11 +28,14 @@ class App:
         self.entities = pygame.sprite.Group(self.player)
         self.enemies = pygame.sprite.Group()
         self.bullets = pygame.sprite.Group()
+        self.explosions = pygame.sprite.Group()
         self.enemy_spawn_time = self.INITIAL_SPAWN_TIME
         self.last_enemy_spawn = pygame.time.get_ticks()
         self.score = 0
         self.level = 1
         self.level_up_time = 0
+        self.lives = 3
+        self.invincible_until = 0
 
     def on_init(self):
         pygame.init()
@@ -93,9 +97,21 @@ class App:
 
     def _check_collisions(self):
         hits = pygame.sprite.groupcollide(self.enemies, self.bullets, True, True)
+        for enemy in hits:
+            self.explosions.add(Explosion(enemy.rect.center))
         self.score += len(hits) * 10
-        if pygame.sprite.spritecollide(self.player, self.enemies, False):
-            self.state = "GAME_OVER"
+
+        now = pygame.time.get_ticks()
+        if now >= self.invincible_until:
+            crushed = pygame.sprite.spritecollide(self.player, self.enemies, True)
+            if crushed:
+                for enemy in crushed:
+                    self.explosions.add(Explosion(enemy.rect.center))
+                self.lives -= 1
+                if self.lives <= 0:
+                    self.state = "GAME_OVER"
+                else:
+                    self.invincible_until = now + 2000
 
     def _blit_centered(self, surface, text_surf, cx, cy):
         surface.blit(text_surf, text_surf.get_rect(center=(cx, cy)))
@@ -120,9 +136,17 @@ class App:
         )
 
     def _render_game(self):
+        now = pygame.time.get_ticks()
         self.back_ground.render(self._display_surf)
         self.enemies.draw(self._display_surf)
         self.bullets.draw(self._display_surf)
+        self.explosions.draw(self._display_surf)
+
+        # Blink player while invincible
+        if self.invincible_until > now:
+            self.player.image.set_alpha(80 if (now % 200) < 100 else 255)
+        else:
+            self.player.image.set_alpha(255)
         self.entities.draw(self._display_surf)
 
         self._display_surf.blit(
@@ -133,7 +157,12 @@ class App:
             self.font_small.render(f"Level: {self.level}", True, (200, 200, 100)),
             (WIDTH - 110, 10),
         )
-        if self.level > 1 and pygame.time.get_ticks() - self.level_up_time < 2000:
+
+        # Lives: red circles bottom-left
+        for i in range(self.lives):
+            pygame.draw.circle(self._display_surf, (220, 40, 40), (14 + i * 22, HEIGHT - 14), 8)
+
+        if self.level > 1 and now - self.level_up_time < 2000:
             self._blit_centered(
                 self._display_surf,
                 self.font_large.render(f"LEVEL {self.level}!", True, (255, 255, 50)),
@@ -172,6 +201,7 @@ class App:
                 self._spawn_enemies()
                 self.enemies.update()
                 self.bullets.update()
+                self.explosions.update()
                 self._check_collisions()
                 self._update_difficulty()
                 self._render_game()
