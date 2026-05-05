@@ -5,88 +5,185 @@ from pygame.locals import *
 from models.Player import Player
 from models.Background import Background
 from models.Enemy import Enemy
- 
+from models.Bullet import Bullet
+from constants import WIDTH, HEIGHT, FPS, ACC, FRIC, ENEMY_BASE_SPEED, ENEMY_SPEED_INCREMENT, LEVEL_THRESHOLD
+
+
 class App:
+    INITIAL_SPAWN_TIME = 1500
+    MIN_SPAWN_TIME = 300
+
     def __init__(self):
         self._running = True
         self._display_surf = None
-        self.size = self.width, self.height = 640, 400
+        self.FramePerSec = None
+        self.font_large = None
+        self.font_small = None
+        self.back_ground = None
+        self.state = "MENU"
 
-        self.FPS = 60
-        self.ACC = 0.5
-        self.FRIC = -0.12
-        self.FramePerSec = pygame.time.Clock()
-
+    def _init_game(self):
         self.player = Player()
-        self.entities = pygame.sprite.Group()
-        self.entities.add(self.player)
-
-        self.back_ground = Background()
-
+        self.entities = pygame.sprite.Group(self.player)
         self.enemies = pygame.sprite.Group()
-        self.enemy_spawn_time = 1000  # Tiempo en milisegundos entre la aparición de cada enemigo
-        self.last_enemy_spawn = pygame.time.get_ticks()  # Tiempo del último enemigo aparecido
+        self.bullets = pygame.sprite.Group()
+        self.enemy_spawn_time = self.INITIAL_SPAWN_TIME
+        self.last_enemy_spawn = pygame.time.get_ticks()
+        self.score = 0
+        self.level = 1
+        self.level_up_time = 0
 
- 
     def on_init(self):
         pygame.init()
-        self._display_surf = pygame.display.set_mode(self.size, pygame.HWSURFACE | pygame.DOUBLEBUF)
-        pygame.display.set_caption('Shoot \'em up AI!')
+        self._display_surf = pygame.display.set_mode(
+            (WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF
+        )
+        pygame.display.set_caption("Shoot 'em up AI!")
+        self.FramePerSec = pygame.time.Clock()
+        self.font_large = pygame.font.SysFont(None, 64)
+        self.font_small = pygame.font.SysFont(None, 32)
+        self.back_ground = Background()
+        self._init_game()
         self._running = True
- 
-    def on_event(self, event):
-        if event.type == pygame.QUIT:
-            self._running = False
-
-    def on_loop(self):
-        pass
-
-    def on_render(self):
-        self.back_ground.render(self._display_surf) # Dibuja el fondo
-        
-        # Dibujar los enemigos
-        for enemy in self.enemies:
-            self._display_surf.blit(enemy.image, enemy.rect)
-        for entity in self.entities:
-                self._display_surf.blit(entity.image, entity.rect)
 
     def on_cleanup(self):
         pygame.quit()
-    
-    def reset_enemy(self, enemy):
-        enemy.rect.x = random.randint(0, self.width - enemy.rect.width)  # Posición aleatoria en el eje x
-        enemy.rect.y = -enemy.rect.height  # Posición en la parte superior de la pantalla
 
-    def reset_enemies(self):
-        current_time = pygame.time.get_ticks()
-        if current_time - self.last_enemy_spawn >= self.enemy_spawn_time:
-            enemy = Enemy()
-            self.reset_enemy(enemy)
-            self.enemies.add(enemy)
-            self.last_enemy_spawn = current_time
- 
-    def on_execute(self):
-        if self.on_init() == False:
-            self._running = False
- 
-        while self._running:
-            for event in pygame.event.get():
-                if event.type == QUIT:
+    def _handle_events(self):
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == KEYDOWN:
+                if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
+                if event.key == K_RETURN:
+                    if self.state == "MENU":
+                        self.state = "PLAYING"
+                    elif self.state == "GAME_OVER":
+                        self._init_game()
+                        self.state = "PLAYING"
 
+    def _handle_shooting(self):
+        if pygame.key.get_pressed()[K_SPACE] and self.player.can_shoot():
+            x, y = self.player.shoot()
+            self.bullets.add(Bullet(x, y))
+
+    def _spawn_enemies(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_enemy_spawn >= self.enemy_spawn_time:
+            speed = ENEMY_BASE_SPEED + (self.level - 1) * ENEMY_SPEED_INCREMENT
+            enemy = Enemy(speed=speed)
+            enemy.rect.x = random.randint(0, WIDTH - enemy.rect.width)
+            enemy.rect.y = -enemy.rect.height
+            enemy._y = float(enemy.rect.y)
+            self.enemies.add(enemy)
+            self.last_enemy_spawn = now
+
+    def _update_difficulty(self):
+        new_level = self.score // LEVEL_THRESHOLD + 1
+        if new_level > self.level:
+            self.level = new_level
+            self.level_up_time = pygame.time.get_ticks()
+        self.enemy_spawn_time = max(
+            self.MIN_SPAWN_TIME,
+            self.INITIAL_SPAWN_TIME - (self.score // 5) * 100,
+        )
+
+    def _check_collisions(self):
+        hits = pygame.sprite.groupcollide(self.enemies, self.bullets, True, True)
+        self.score += len(hits) * 10
+        if pygame.sprite.spritecollide(self.player, self.enemies, False):
+            self.state = "GAME_OVER"
+
+    def _blit_centered(self, surface, text_surf, cx, cy):
+        surface.blit(text_surf, text_surf.get_rect(center=(cx, cy)))
+
+    def _render_menu(self):
+        self.back_ground.render(self._display_surf)
+        cx = WIDTH // 2
+        self._blit_centered(
+            self._display_surf,
+            self.font_large.render("SHOOT 'EM UP AI", True, (255, 255, 255)),
+            cx, HEIGHT // 2 - 60,
+        )
+        self._blit_centered(
+            self._display_surf,
+            self.font_small.render("Press ENTER to play", True, (200, 200, 200)),
+            cx, HEIGHT // 2 + 10,
+        )
+        self._blit_centered(
+            self._display_surf,
+            self.font_small.render("Arrow keys: move  |  Space: shoot  |  ESC: quit", True, (160, 160, 160)),
+            cx, HEIGHT // 2 + 50,
+        )
+
+    def _render_game(self):
+        self.back_ground.render(self._display_surf)
+        self.enemies.draw(self._display_surf)
+        self.bullets.draw(self._display_surf)
+        self.entities.draw(self._display_surf)
+
+        self._display_surf.blit(
+            self.font_small.render(f"Score: {self.score}", True, (255, 255, 255)),
+            (10, 10),
+        )
+        self._display_surf.blit(
+            self.font_small.render(f"Level: {self.level}", True, (200, 200, 100)),
+            (WIDTH - 110, 10),
+        )
+        if self.level > 1 and pygame.time.get_ticks() - self.level_up_time < 2000:
+            self._blit_centered(
+                self._display_surf,
+                self.font_large.render(f"LEVEL {self.level}!", True, (255, 255, 50)),
+                WIDTH // 2, HEIGHT // 2,
+            )
+
+    def _render_game_over(self):
+        self.back_ground.render(self._display_surf)
+        cx = WIDTH // 2
+        self._blit_centered(
+            self._display_surf,
+            self.font_large.render("GAME OVER", True, (255, 50, 50)),
+            cx, HEIGHT // 2 - 60,
+        )
+        self._blit_centered(
+            self._display_surf,
+            self.font_small.render(f"Score: {self.score}", True, (255, 255, 255)),
+            cx, HEIGHT // 2,
+        )
+        self._blit_centered(
+            self._display_surf,
+            self.font_small.render("Press ENTER to restart", True, (200, 200, 200)),
+            cx, HEIGHT // 2 + 50,
+        )
+
+    def on_execute(self):
+        self.on_init()
+
+        while self._running:
+            self._handle_events()
             self.back_ground.update()
-            self.player.move(self.ACC, self.FRIC)
 
-            self.reset_enemies()
+            if self.state == "PLAYING":
+                self.player.move(ACC, FRIC)
+                self._handle_shooting()
+                self._spawn_enemies()
+                self.enemies.update()
+                self.bullets.update()
+                self._check_collisions()
+                self._update_difficulty()
+                self._render_game()
+            elif self.state == "MENU":
+                self._render_menu()
+            elif self.state == "GAME_OVER":
+                self._render_game_over()
 
-            # Actualizar los enemigos
-            self.enemies.update()
-
-            self.on_render()
             pygame.display.update()
-            self.FramePerSec.tick(self.FPS)
- 
-if __name__ == "__main__" :
+            self.FramePerSec.tick(FPS)
+
+
+if __name__ == "__main__":
     theApp = App()
     theApp.on_execute()

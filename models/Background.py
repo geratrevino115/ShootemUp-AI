@@ -1,27 +1,25 @@
 import pygame
+from constants import WIDTH, HEIGHT
 
-class Background(pygame.sprite.Sprite):
+
+class Background:
     def __init__(self):
-        super().__init__()
         self.bgimage = pygame.image.load("assets/background.jpg")
-        self.rect = self.bgimage.get_rect()
-
-        self.bgY1 = 0
-        self.bgX1 = 0
-
-        self.bgY2 = -self.rect.height
-        self.bgX2 = 0
-
-        self.moving_speed = 2
+        self.bgimage = pygame.transform.scale(self.bgimage, (WIDTH, HEIGHT))
+        h = self.bgimage.get_height()
+        self.y1 = 0
+        self.y2 = -h
+        self.speed = 2
 
     def update(self):
-        self.bgY1 += self.moving_speed
-        self.bgY2 += self.moving_speed
-        if self.bgY1 >= self.rect.height:
-            self.bgY1 = -self.rect.height
-        if self.bgY2 >= self.rect.height:
-            self.bgY2 = -self.rect.height
-             
-    def render(self, DISPLAYSURF):
-        DISPLAYSURF.blit(self.bgimage, (self.bgX1, self.bgY1))
-        DISPLAYSURF.blit(self.bgimage, (self.bgX2, self.bgY2))
+        h = self.bgimage.get_height()
+        self.y1 += self.speed
+        self.y2 += self.speed
+        if self.y1 >= h:
+            self.y1 = -h
+        if self.y2 >= h:
+            self.y2 = -h
+
+    def render(self, surface):
+        surface.blit(self.bgimage, (0, self.y1))
+        surface.blit(self.bgimage, (0, self.y2))
