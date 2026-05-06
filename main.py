@@ -47,6 +47,8 @@ class App:
         self.font_large = pygame.font.SysFont(None, 64)
         self.font_small = pygame.font.SysFont(None, 32)
         self.back_ground = Background()
+        heart_raw = pygame.image.load("assets/heart.png").convert_alpha()
+        self.heart_img = pygame.transform.scale(heart_raw, (30, 30))
         self._init_game()
         self._running = True
 
@@ -158,9 +160,8 @@ class App:
             (WIDTH - 110, 10),
         )
 
-        # Lives: red circles bottom-left
         for i in range(self.lives):
-            pygame.draw.circle(self._display_surf, (220, 40, 40), (14 + i * 22, HEIGHT - 14), 8)
+            self._display_surf.blit(self.heart_img, (4 + i * 28, HEIGHT - 34))
 
         if self.level > 1 and now - self.level_up_time < 2000:
             self._blit_centered(
